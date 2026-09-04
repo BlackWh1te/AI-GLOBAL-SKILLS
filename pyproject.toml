@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "global-agent-setup"
+version = "0.1.0"
+description = "Safe capability resolver and setup planner for AI-agent projects"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Global Agent Setup contributors" }]
+dependencies = []
+
+[project.scripts]
+global-agent-setup = "global_agent_setup.cli:main"
+global-agent-setup-mcp = "global_agent_setup.mcp_server:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

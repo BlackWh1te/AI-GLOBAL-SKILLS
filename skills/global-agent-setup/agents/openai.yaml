@@ -1,0 +1,6 @@
+interface:
+  display_name: "Global Agent Setup"
+  short_description: "Plan a safe agent stack for any project"
+  default_prompt: "Use $global-agent-setup to inspect this project and propose its required skills, plugins, MCP servers, and tools."
+policy:
+  allow_implicit_invocation: true

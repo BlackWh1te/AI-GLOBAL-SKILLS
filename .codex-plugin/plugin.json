@@ -1,0 +1,32 @@
+{
+  "name": "global-agent-setup",
+  "version": "0.1.0",
+  "description": "Analyze a software project and produce a safe, auditable setup plan for skills, plugins, MCP servers, and built-in tools.",
+  "author": {
+    "name": "Global Agent Setup contributors"
+  },
+  "license": "MIT",
+  "keywords": [
+    "agent-skills",
+    "codex",
+    "mcp",
+    "project-setup",
+    "orchestration"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Global Agent Setup",
+    "shortDescription": "Plan the right agent stack for a project.",
+    "longDescription": "Inspects an existing or new project, matches its needs against a curated component registry, and produces a reviewable setup plan before any installation or configuration change.",
+    "developerName": "Global Agent Setup contributors",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Project inspection",
+      "Capability resolution",
+      "Setup planning",
+      "Registry search"
+    ],
+    "defaultPrompt": "Analyze this project and propose the skills, plugins, MCP servers, and tools it needs."
+  }
+}

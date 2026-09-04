@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://global-agent-setup.local/schemas/catalog.schema.json",
+  "title": "Global Agent Setup component catalog",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "components"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "components": {"type": "array", "items": {"$ref": "#/$defs/component"}}
+  },
+  "$defs": {
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "kind", "summary", "capabilities", "keywords", "project_files", "platforms", "source", "install", "risk", "status"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"},
+        "name": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["skill", "plugin", "mcp", "tool", "reference"]},
+        "summary": {"type": "string", "minLength": 1},
+        "capabilities": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+        "keywords": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "project_files": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "platforms": {"type": "array", "items": {"enum": ["codex", "chatgpt-work"]}, "minItems": 1, "uniqueItems": true},
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "locator", "license", "revision"],
+          "properties": {
+            "type": {"enum": ["builtin", "marketplace", "git", "documentation"]},
+            "locator": {"type": "string", "minLength": 1},
+            "license": {"type": ["string", "null"]},
+            "revision": {"type": ["string", "null"]}
+          }
+        },
+        "install": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "requires_confirmation"],
+          "properties": {
+            "mode": {"enum": ["builtin", "plugin", "skill", "mcp", "manual"]},
+            "requires_confirmation": {"type": "boolean"}
+          }
+        },
+        "risk": {"enum": ["low", "medium", "high", "blocked"]},
+        "status": {"enum": ["candidate", "reviewed", "curated", "deprecated", "blocked"]}
+      }
+    }
+  }
+}

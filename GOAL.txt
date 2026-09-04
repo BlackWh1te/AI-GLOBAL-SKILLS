@@ -1,0 +1,486 @@
+You are a principal software architect, product designer, security engineer, DevOps engineer, and autonomous coding agent. Build a production-grade open-source project called **Global MCP Control Plane**.
+
+Do not create a mock landing page. Build the actual working product.
+
+## Existing project
+
+Start by inspecting the existing `global-agent-setup` repository. Preserve its useful skill, registry, planner, CLI, MCP, and safety functionality. Refactor or migrate components only when justified, and document major architectural decisions.
+
+Do not discard working code without proving the replacement works.
+
+## Product goal
+
+Create a professional local web dashboard where users can discover, install, configure, run, monitor, update, and remove MCP servers without manually visiting GitHub, cloning repositories, or editing configuration files.
+
+The system must support both technical and nontechnical users.
+
+## Local application behavior
+
+Create a local control-plane service with these startup rules:
+
+1. Default to `127.0.0.1:3000`.
+
+2. Check whether port `3000` is available before starting.
+
+3. Never kill another process automatically.
+
+4. If port `3000` is occupied, show the process information when permitted and provide:
+
+   * a clear error;
+   * a `--port` option;
+   * an option to reuse the existing Global MCP instance if it is healthy.
+
+5. Bind to `127.0.0.1`, never `0.0.0.0` by default.
+
+6. Open the dashboard in the default browser only after the health endpoint reports ready.
+
+7. Use a single-instance lock to prevent duplicate daemons.
+
+8. Provide clean shutdown and process recovery.
+
+Required commands:
+
+```bash
+global-mcp start
+global-mcp stop
+global-mcp restart
+global-mcp status
+global-mcp dashboard
+global-mcp search <query>
+global-mcp install <server-id>
+global-mcp uninstall <server-id>
+global-mcp update [server-id]
+global-mcp list
+global-mcp doctor
+global-mcp clients
+global-mcp configure <client>
+global-mcp logs [server-id]
+global-mcp registry sync
+```
+
+Every dashboard operation must have an equivalent CLI command and structured JSON output mode.
+
+## Professional dashboard
+
+Build a responsive, accessible, developer-focused interface. It should feel like a polished control plane, not a generic admin template.
+
+The first viewport must immediately show:
+
+* global service status;
+* running and failing MCP servers;
+* connected AI clients;
+* catalog search;
+* installation/update alerts;
+* recent activity.
+
+Create these product areas:
+
+### Overview
+
+* service health;
+* installed, running, stopped, and failing server counts;
+* connected client count;
+* updates available;
+* recent installations and configuration changes;
+* health and latency summaries.
+
+### MCP Catalog
+
+* full-text search;
+* capability, language, transport, platform, trust, and license filters;
+* pagination or virtualized results;
+* server detail panel;
+* repository owner and source;
+* latest release and pinned revision;
+* supported transports;
+* required runtime;
+* declared tools;
+* required environment variables;
+* permissions and risk;
+* supported AI clients;
+* install button.
+
+Clicking Install must first show an exact review screen. After confirmation, the engine performs the installation without requiring manual cloning.
+
+### Installed Servers
+
+* start, stop, restart, update, uninstall;
+* version and source revision;
+* process health;
+* exposed MCP tools;
+* transport and endpoint;
+* configuration editor;
+* environment-variable status without revealing secret values;
+* logs;
+* latency;
+* last health check;
+* rollback to the previous version.
+
+### AI Clients
+
+Create an adapter system for:
+
+* Codex and ChatGPT Work;
+* Claude Code;
+* Cursor;
+* Windsurf;
+* Kimi CLI;
+* Devin;
+* Antigravity;
+* other MCP-compatible CLI and IDE clients.
+
+For every client:
+
+* detect whether it is installed;
+* detect configuration paths by operating system;
+* show configured MCP servers;
+* validate configuration syntax;
+* preview changes as a diff;
+* back up configuration before writing;
+* update atomically only after confirmation;
+* test the connection using MCP initialization and `tools/list`;
+* show connected, disconnected, unsupported, or authentication-required status.
+
+Do not fake compatibility. If a client’s configuration format cannot be verified from primary documentation, mark the adapter experimental or unsupported.
+
+### Activity and Audit Log
+
+Record every significant operation:
+
+* catalog sync;
+* search;
+* install plan;
+* user approval;
+* download;
+* checksum verification;
+* extraction;
+* dependency installation;
+* configuration changes;
+* process start and stop;
+* health checks;
+* updates;
+* rollback;
+* uninstall;
+* builds;
+* tests;
+* commits;
+* pushes;
+* releases.
+
+Use structured append-only events with timestamps, operation IDs, result status, duration, affected files, and sanitized errors. Never store secrets.
+
+## MCP discovery service
+
+Build a registry synchronization engine that discovers MCP servers from:
+
+1. the official MCP Registry where available;
+2. GitHub Search API;
+3. curated allowlists;
+4. manually submitted repositories.
+
+GitHub discovery should search relevant topics, manifests, package metadata, README signals, releases, and MCP configuration files. Use pagination, caching, ETags, rate-limit handling, and optional GitHub authentication.
+
+Do not claim to fetch literally every GitHub repository. Implement a repeatable, paginated discovery system that continuously expands the catalog.
+
+Normalize each candidate into a common schema containing:
+
+* stable ID;
+* name and description;
+* repository URL;
+* owner;
+* license;
+* stars and activity metadata;
+* latest release;
+* immutable commit SHA;
+* package/runtime type;
+* install method;
+* executable command and arguments;
+* MCP transport;
+* configuration example;
+* environment-variable names;
+* tool names and descriptions;
+* supported operating systems;
+* supported AI clients;
+* trust tier;
+* security findings;
+* last verification time;
+* deprecation status.
+
+Run catalog synchronization:
+
+* manually;
+* at application startup when the cache is stale;
+* through a configurable background schedule;
+* through CI automation.
+
+## Installation engine
+
+Users must not need to run `git clone`.
+
+Support verified installation strategies such as:
+
+* npm packages;
+* Python packages through isolated environments;
+* downloadable signed releases;
+* container images;
+* GitHub source archives pinned to immutable commits;
+* approved local binaries.
+
+Never execute installation instructions copied directly from a README.
+
+Before installation:
+
+1. Resolve the exact version.
+2. Pin an immutable revision.
+3. verify the license;
+4. calculate or verify checksums;
+5. inspect install hooks;
+6. display required permissions;
+7. display filesystem, network, credential, and execution scope;
+8. require explicit confirmation.
+
+Install each MCP server into an isolated managed directory. Maintain a lockfile containing exact versions, hashes, sources, configuration, and ownership.
+
+Provide:
+
+* transactional installation;
+* rollback;
+* uninstall cleanup;
+* dependency isolation;
+* per-server data directories;
+* process supervision;
+* stdout/stderr capture;
+* timeout and restart policies;
+* health checks;
+* update detection;
+* version comparison.
+
+Never run arbitrary shell command strings. Use validated executable and argument arrays.
+
+## Security requirements
+
+Treat every third-party MCP server as untrusted until reviewed.
+
+Implement:
+
+* trust levels: verified, curated, community, unknown, blocked;
+* local-only API binding;
+* CSRF and Origin protection;
+* local session token;
+* strict path validation;
+* directory traversal protection;
+* archive extraction protection;
+* command allowlisting;
+* secret redaction;
+* secure secret references;
+* no credentials stored in repository files;
+* dependency and vulnerability scanning;
+* SBOM generation;
+* immutable provenance;
+* installation approval gates;
+* audit logs;
+* atomic client-config backups;
+* rollback.
+
+Never expose secret values in the dashboard, logs, API, diffs, or release artifacts.
+
+## Architecture
+
+Use a maintainable monorepo structure similar to:
+
+```text
+apps/
+  dashboard/
+  daemon/
+packages/
+  core/
+  registry/
+  installer/
+  client-adapters/
+  process-manager/
+  shared/
+plugins/
+  global-agent-setup/
+docs/
+  architecture/
+  adapters/
+  security/
+  contributing/
+```
+
+Prefer TypeScript for the local daemon, CLI, shared contracts, and frontend unless the existing implementation provides a stronger reason to retain Python modules. If both languages remain, define a clean boundary and avoid duplicated business logic.
+
+Provide:
+
+* typed API contracts;
+* versioned registry schema;
+* database migrations;
+* dependency injection for installers and adapters;
+* platform-specific filesystem abstractions;
+* unit, integration, API, and end-to-end tests;
+* structured logging;
+* deterministic fixtures.
+
+Use SQLite for local state unless a different choice is demonstrably better.
+
+## API
+
+Provide documented local APIs for:
+
+* health;
+* service status;
+* registry sync and search;
+* candidate details;
+* install planning;
+* installation approval and execution;
+* installed server lifecycle;
+* logs;
+* client detection;
+* configuration previews;
+* configuration application;
+* connection tests;
+* updates;
+* rollback;
+* audit history.
+
+Mutating endpoints must use operation IDs and return progress states suitable for live UI updates.
+
+## GitHub-ready open-source setup
+
+Prepare the repository professionally with:
+
+* `README.md`;
+* `CONTRIBUTING.md`;
+* `CODE_OF_CONDUCT.md`;
+* `SECURITY.md`;
+* `SUPPORT.md`;
+* `GOVERNANCE.md`;
+* `LICENSE`;
+* architecture documentation;
+* development setup;
+* contributor quick start;
+* adapter authoring guide;
+* registry submission guide;
+* threat model;
+* release process;
+* troubleshooting guide;
+* roadmap.
+
+Add:
+
+* issue templates for bugs, features, new MCP submissions, and client adapters;
+* pull-request template;
+* Discussions configuration recommendations;
+* CODEOWNERS;
+* Dependabot or Renovate;
+* labels documentation;
+* branch protection recommendations;
+* required status checks;
+* secret scanning;
+* dependency review;
+* CodeQL;
+* lint, test, build, and end-to-end CI;
+* cross-platform testing for Linux, macOS, and Windows;
+* release workflow;
+* changelog generation;
+* artifact checksums;
+* SBOM;
+* build provenance.
+
+Write contributor documentation so a new developer can run the project, add an MCP catalog source, create a client adapter, run tests, and submit a pull request without private knowledge.
+
+## GitHub connection
+
+If GitHub access is available, configure the repository and workflows directly. Before creating or pushing to a remote repository, confirm the exact GitHub owner, repository name, visibility, and default branch.
+
+Never guess the account or overwrite an existing remote.
+
+If GitHub access is unavailable, complete every local GitHub file and provide the exact final commands or connection step required.
+
+## Build, commit, push, and release discipline
+
+After every completed change:
+
+1. format and lint;
+2. run relevant unit and integration tests;
+3. build all affected packages;
+4. run security checks;
+5. update documentation;
+6. record the operation;
+7. create a focused Conventional Commit;
+8. push only after validation succeeds;
+9. update the changelog;
+10. create a semantic version;
+11. create a git tag;
+12. publish a GitHub Release with human-readable release notes;
+13. attach built artifacts, checksums, SBOM, and provenance.
+
+Every successful merge to `main` should produce a release. Use the Conventional Commit type to determine patch, minor, or major version changes. Never publish a release when tests, builds, or security gates fail.
+
+Release notes must include:
+
+* summary;
+* user-visible changes;
+* technical changes;
+* fixes;
+* security notes;
+* compatibility changes;
+* migration instructions;
+* contributors;
+* artifact verification instructions.
+
+Maintain `CHANGELOG.md` and an append-only release history. Do not merely commit and push.
+
+## Implementation process
+
+1. Inspect the existing repository and document the current state.
+
+2. Create an implementation plan with milestones and acceptance criteria.
+
+3. Write architecture decision records for major choices.
+
+4. Build the smallest complete vertical slice first:
+
+   * daemon starts;
+   * port 3000 is checked;
+   * dashboard opens;
+   * catalog can be searched;
+   * one fixture MCP server can be reviewed and installed;
+   * the installed server can be started;
+   * MCP `initialize` and `tools/list` succeed;
+   * status appears in the dashboard;
+   * one client configuration can be previewed.
+
+5. Expand discovery, installers, adapters, monitoring, and GitHub automation.
+
+6. Use realistic test fixtures rather than fake production claims.
+
+7. Test the dashboard on desktop and mobile sizes.
+
+8. Test keyboard navigation, loading, empty, error, offline, and success states.
+
+9. Do not leave core paths as placeholder buttons or unimplemented UI.
+
+10. Clearly label experimental capabilities.
+
+## Definition of done
+
+The project is complete only when:
+
+* the service starts locally and safely handles port 3000;
+* the browser opens after readiness;
+* users can search a synchronized MCP catalog;
+* installation does not require manual GitHub cloning;
+* an MCP server can be installed, started, health-checked, updated, rolled back, and removed;
+* configuration changes can be previewed for supported AI clients;
+* at least Codex, Claude Code, Cursor, and Windsurf adapters are implemented and tested;
+* all CLI and dashboard operations share the same core engine;
+* audit history records every operation;
+* automated registry checks work;
+* CI passes on Linux, macOS, and Windows;
+* contributor documentation is complete;
+* GitHub release automation creates changelogs, tags, release posts, checksums, SBOMs, and provenance;
+* no secret or unverified executable is silently installed;
+* the interface looks and behaves like a professional developer product.
+
+Work autonomously within these requirements. Ask questions only when blocked by missing credentials, an ambiguous destructive action, or a decision that materially changes the product. Do not stop after producing a plan—implement, verify, document, commit, push, and release each completed milestone.
