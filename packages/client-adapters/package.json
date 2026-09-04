@@ -1,5 +1,5 @@
 {
-  "name": "@global-mcp/client-adapters",
+  "name": "@BlackWh1te/client-adapters",
   "version": "0.1.0",
   "private": true,
   "main": "src/index.ts",

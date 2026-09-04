@@ -13,6 +13,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: google-github-actions/release-please-action@v4
+        id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      - name: Checkout code
+        if: ${{ steps.release.outputs.releases_created }}
+        uses: actions/checkout@v4
+
+      - name: Setup Node/Bun for Publishing
+        if: ${{ steps.release.outputs.releases_created }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@BlackWh1te'
+
+      - name: Install and Build
+        if: ${{ steps.release.outputs.releases_created }}
+        run: |
+          npm install -g bun
+          bun install
+          bun run build
+
+      - name: Publish Packages
+        if: ${{ steps.release.outputs.releases_created }}
+        run: npm publish --workspaces --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

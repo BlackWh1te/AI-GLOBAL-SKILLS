@@ -1,5 +1,5 @@
 {
-  "name": "@global-mcp/registry",
+  "name": "@BlackWh1te/registry",
   "version": "0.1.0",
   "private": true,
   "main": "src/index.ts",

@@ -1,5 +1,5 @@
 {
-  "name": "@global-mcp/installer",
+  "name": "@BlackWh1te/installer",
   "version": "0.1.0",
   "private": true,
   "main": "src/index.ts",
