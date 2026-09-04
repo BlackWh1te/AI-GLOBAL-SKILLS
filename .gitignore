@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+global-agent-setup.lock.json
+setup-plan.json
+node_modules/
+.env
+.env.*
+*.key
+*.pem
+*secret*
