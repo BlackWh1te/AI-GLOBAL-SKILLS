@@ -5,5 +5,8 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "tsc"
+  },
+  "dependencies": {
+    "@BlackWh1te/core": "workspace:*"
   }
 }

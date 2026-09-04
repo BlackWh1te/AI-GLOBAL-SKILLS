@@ -1,6 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { AuditLogger } from '@BlackWh1te/core';
+
+const audit = new AuditLogger();
 
 export interface ClientAdapter {
   id: string;
@@ -20,7 +23,7 @@ export class AntigravityAdapter implements ClientAdapter {
   }
 
   isInstalled(): boolean {
-    return fs.existsSync(this.getConfigPath());
+    return fs.existsSync(path.join(os.homedir(), '.gemini'));
   }
 
   private readConfig(): any {
@@ -33,15 +36,12 @@ export class AntigravityAdapter implements ClientAdapter {
 
   previewConfig(serverId: string, command: string, args: string[], env: Record<string, string> = {}): string {
     const config = this.readConfig();
-    
-    // Simulate what would be injected
     config.mcpServers = config.mcpServers || {};
     config.mcpServers[serverId] = {
       command,
       args,
       env: Object.keys(env).length > 0 ? env : undefined
     };
-
     return JSON.stringify(config, null, 2);
   }
 
@@ -49,14 +49,41 @@ export class AntigravityAdapter implements ClientAdapter {
     const configPath = this.getConfigPath();
     const newConfig = JSON.parse(this.previewConfig(serverId, command, args, env));
     
-    // Backup before write
     if (fs.existsSync(configPath)) {
-      const backupPath = `${configPath}.bak.${Date.now()}`;
-      fs.copyFileSync(configPath, backupPath);
+      fs.copyFileSync(configPath, `${configPath}.bak.${Date.now()}`);
     } else {
       fs.mkdirSync(path.dirname(configPath), { recursive: true });
     }
-
     fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2));
+    
+    audit.log('CONFIG_INJECTED', serverId, { adapter: this.id, path: configPath });
   }
 }
+
+export class CursorAdapter extends AntigravityAdapter {
+  id = 'cursor';
+  name = 'Cursor IDE';
+  getConfigPath(): string {
+    return path.join(os.homedir(), '.cursor', 'mcp.json');
+  }
+  isInstalled(): boolean {
+    return fs.existsSync(path.join(os.homedir(), '.cursor'));
+  }
+}
+
+export class WindsurfAdapter extends AntigravityAdapter {
+  id = 'windsurf';
+  name = 'Windsurf IDE';
+  getConfigPath(): string {
+    return path.join(os.homedir(), '.codeium', 'windsurf', 'mcp_config.json');
+  }
+  isInstalled(): boolean {
+    return fs.existsSync(path.join(os.homedir(), '.codeium', 'windsurf'));
+  }
+}
+
+export const adapters = [
+  new AntigravityAdapter(),
+  new CursorAdapter(),
+  new WindsurfAdapter()
+];

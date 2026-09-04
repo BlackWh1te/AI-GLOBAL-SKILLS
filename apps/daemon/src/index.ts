@@ -71,6 +71,34 @@ app.get('/api/servers/:id/logs', (req, res) => {
   res.json({ logs: pm.getLogs(req.params.id) });
 });
 
+import { adapters } from '@BlackWh1te/client-adapters';
+
+app.get('/api/adapters', (req, res) => {
+  res.json(adapters.map(a => ({
+    id: a.id,
+    name: a.name,
+    installed: a.isInstalled(),
+    configPath: a.getConfigPath()
+  })));
+});
+
+app.post('/api/adapters/:adapterId/inject', async (req, res) => {
+  try {
+    const { adapterId } = req.params;
+    const { serverId, command, args, env } = req.body;
+    
+    const adapter = adapters.find(a => a.id === adapterId);
+    if (!adapter) {
+      return res.status(404).json({ error: 'Adapter not found' });
+    }
+    
+    await adapter.applyConfig(serverId, command, args, env);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 function openBrowser(url: string) {
   let command;
   switch (os.platform()) {

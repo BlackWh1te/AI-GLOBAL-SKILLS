@@ -9,6 +9,8 @@ function App() {
   const [logs, setLogs] = useState<string[]>([]);
   
   const SERVER_ID = 'test-server';
+  
+  const [adapters, setAdapters] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchHealth = async () => {
@@ -46,6 +48,14 @@ function App() {
     fetchHealth();
     fetchServerStatus();
     
+    const fetchAdapters = async () => {
+      try {
+        const res = await fetch('http://127.0.0.1:3000/api/adapters');
+        if (res.ok) setAdapters(await res.json());
+      } catch (e) {}
+    };
+    fetchAdapters();
+    
     const interval = setInterval(() => {
       fetchHealth();
       fetchServerStatus();
@@ -73,6 +83,23 @@ function App() {
       await fetch(`http://127.0.0.1:3000/api/servers/${SERVER_ID}/stop`, { method: 'POST' });
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const injectConfig = async (adapterId: string) => {
+    try {
+      await fetch(`http://127.0.0.1:3000/api/adapters/${adapterId}/inject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serverId: SERVER_ID,
+          command: 'node',
+          args: ['-e', 'console.log("Server started")']
+        })
+      });
+      alert('Injected into ' + adapterId);
+    } catch (err) {
+      alert('Error injecting');
     }
   };
 
@@ -135,6 +162,30 @@ function App() {
           }}>
             {logs.length === 0 ? <span style={{ color: '#64748b' }}>No logs yet...</span> : logs.map((log, i) => (
               <div key={i}>{log}</div>
+            ))}
+          </div>
+        </section>
+
+        <section style={{ padding: '1.5rem', background: '#fff', border: '1px solid #e5e5e5', borderRadius: '8px' }}>
+          <h2 style={{ marginTop: 0 }}>IDE Integration</h2>
+          <p style={{ color: '#666', marginBottom: '1rem' }}>Install this MCP server directly into your local IDEs.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {adapters.map(adapter => (
+              <div key={adapter.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div>
+                  <div style={{ fontWeight: 'bold' }}>{adapter.name}</div>
+                  <div style={{ fontSize: '0.875rem', color: '#64748b' }}>{adapter.configPath}</div>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.875rem', color: adapter.installed ? '#10b981' : '#94a3b8' }}>
+                    {adapter.installed ? 'Installed' : 'Not found'}
+                  </span>
+                  <button 
+                    onClick={() => injectConfig(adapter.id)}
+                    style={{ padding: '0.5rem 1rem', cursor: 'pointer', background: '#333', color: 'white', border: 'none', borderRadius: '4px' }}
+                  >Inject Config</button>
+                </div>
+              </div>
             ))}
           </div>
         </section>
