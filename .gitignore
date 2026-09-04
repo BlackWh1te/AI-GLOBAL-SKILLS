@@ -1,3 +1,4 @@
+# Cache and Temp files
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -5,9 +6,21 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+node_modules/
+.DS_Store
+Thumbs.db
+logs/
+*.log
+coverage/
+.nyc_output/
+.global-mcp.lock
+
+# Project-specific generated files
 global-agent-setup.lock.json
 setup-plan.json
-node_modules/
+catalog.csv
+
+# Secrets and environment variables
 .env
 .env.*
 *.key
