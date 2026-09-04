@@ -1,5 +1,5 @@
 {
-  "name": "@BlackWh1te/daemon",
+  "name": "@blackwh1te/daemon",
   "version": "0.1.0",
   "private": true,
   "main": "src/index.ts",
@@ -10,9 +10,11 @@
   },
   "dependencies": {
     "express": "^4.21.0",
-    "@BlackWh1te/process-manager": "workspace:*",
-    "@BlackWh1te/client-adapters": "workspace:*",
-    "@BlackWh1te/registry": "workspace:*",
+    "@blackwh1te/process-manager": "workspace:*",
+    "@blackwh1te/client-adapters": "workspace:*",
+    "@blackwh1te/registry": "workspace:*",
+    "@blackwh1te/installer": "workspace:*",
+    "@blackwh1te/core": "workspace:*",
     "cors": "^2.8.5"
   },
   "devDependencies": {

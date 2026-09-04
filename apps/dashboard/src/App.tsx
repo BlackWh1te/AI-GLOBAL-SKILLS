@@ -3,10 +3,10 @@ import { useEffect, useState } from 'react';
 function App() {
   const [status, setStatus] = useState<string>('checking...');
   const [version, setVersion] = useState<string>('');
-  const [error, setError] = useState<string>('');
+  const [_error, setError] = useState<string>('');
   
-  const [serverState, setServerState] = useState<string>('stopped');
-  const [logs, setLogs] = useState<string[]>([]);
+  const [_serverState, setServerState] = useState<string>('stopped');
+  const [_logs, setLogs] = useState<string[]>([]);
   
   const SERVER_ID = 'test-server';
   

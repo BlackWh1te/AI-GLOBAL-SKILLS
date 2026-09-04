@@ -28,7 +28,7 @@ jobs:
         with:
           node-version: '20.x'
           registry-url: 'https://npm.pkg.github.com'
-          scope: '@BlackWh1te'
+          scope: '@blackwh1te'
 
       - name: Install and Build
         if: ${{ steps.release.outputs.releases_created }}
@@ -36,6 +36,26 @@ jobs:
           npm install -g bun
           bun install
           bun run build
+
+      - name: Generate SBOM
+        if: ${{ steps.release.outputs.releases_created }}
+        run: |
+          npm i -g @cyclonedx/cyclonedx-npm
+          cyclonedx-npm --output-format JSON --output-file sbom.json
+          
+      - name: Generate Checksums
+        if: ${{ steps.release.outputs.releases_created }}
+        run: |
+          sha256sum sbom.json > checksums.txt
+          
+      - name: Upload Artifacts to Release
+        if: ${{ steps.release.outputs.releases_created }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag_name }}
+          files: |
+            sbom.json
+            checksums.txt
 
       - name: Publish Packages
         if: ${{ steps.release.outputs.releases_created }}

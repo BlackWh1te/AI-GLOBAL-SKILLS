@@ -53,7 +53,9 @@ program.command('search <query>')
 
 program.command('install <locator>')
   .description('Install an MCP server from NPM')
-  .action(async (locator) => {
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--approve-scripts', 'Approve lifecycle scripts execution')
+  .action(async (locator, options) => {
     console.log(`Planning installation for ${locator}...`);
     const plan = await fetchApi('/registry/install/plan', {
       method: 'POST',
@@ -62,23 +64,35 @@ program.command('install <locator>')
     });
     
     console.log('\n--- Install Plan ---');
-    console.log(`Server ID: ${plan.serverId}`);
-    console.log(`Version:   ${plan.version}`);
-    console.log(`Target:    ${plan.targetDir}`);
-    console.log(`Integrity: ${plan.integrity}`);
+    console.log(`Server ID:  ${plan.serverId}`);
+    console.log(`Version:    ${plan.version}`);
+    console.log(`Target:     ${plan.targetDir}`);
+    console.log(`License:    ${plan.license}`);
+    console.log(`Integrity:  ${plan.integrity}`);
+    console.log(`Binaries:   ${plan.binaries.join(', ') || 'None'}`);
+    console.log(`Scripts:    ${plan.lifecycleScripts.join(', ') || 'None'}`);
+    console.log(`Risk Level: ${plan.riskAnalysis}`);
     console.log('--------------------\n');
     
-    const ans = prompt('Approve installation? (y/n) ');
-    if (ans?.toLowerCase() !== 'y') {
-      console.log('Aborted.');
-      return;
+    if (plan.lifecycleScripts.length > 0 && !options.approveScripts) {
+      console.log('WARNING: This package contains lifecycle scripts. Installation is blocked by default.');
+      console.log('To proceed, you must pass --approve-scripts if you trust this package.');
+      process.exit(1);
+    }
+    
+    if (!options.yes) {
+      const ans = prompt('Approve installation? (y/n) ');
+      if (ans?.toLowerCase() !== 'y') {
+        console.log('Aborted.');
+        return;
+      }
     }
     
     console.log('Installing (this may take a minute)...');
     const res = await fetchApi('/registry/install', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan })
+      body: JSON.stringify({ plan, approveScripts: options.approveScripts || false })
     });
     console.log(`Successfully installed ${res.server.name} as ${res.server.id}`);
   });

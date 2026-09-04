@@ -1,5 +1,5 @@
 {
-  "name": "@BlackWh1te/installer",
+  "name": "@blackwh1te/installer",
   "version": "0.1.0",
   "private": true,
   "main": "src/index.ts",
@@ -7,6 +7,9 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@BlackWh1te/core": "workspace:*"
+    "@blackwh1te/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@blackwh1te/process-manager": "workspace:*"
   }
 }

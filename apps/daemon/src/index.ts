@@ -30,7 +30,7 @@ function releaseLock() {
 }
 
 import pkg from '../package.json';
-import { ProcessManager } from '@BlackWh1te/process-manager';
+import { ProcessManager } from '@blackwh1te/process-manager';
 
 const pm = new ProcessManager();
 
@@ -71,10 +71,10 @@ app.get('/api/servers/:id/logs', (req, res) => {
   res.json({ logs: pm.getLogs(req.params.id) });
 });
 
-import { adapters } from '@BlackWh1te/client-adapters';
-import { RegistryClient, NpmScanner } from '@BlackWh1te/registry';
-import { InstallationService } from '@BlackWh1te/installer';
-import { DBManager } from '@BlackWh1te/core';
+import { adapters } from '@blackwh1te/client-adapters';
+import { RegistryClient, NpmScanner } from '@blackwh1te/registry';
+import { InstallationService } from '@blackwh1te/installer';
+import { DBManager } from '@blackwh1te/core';
 
 const registryClient = new RegistryClient();
 const npmScanner = new NpmScanner();
@@ -102,8 +102,8 @@ app.post('/api/registry/install/plan', async (req, res) => {
 
 app.post('/api/registry/install', async (req, res) => {
   try {
-    const plan = req.body.plan;
-    const record = await installer.executeInstall(plan);
+    const { plan, approveScripts } = req.body;
+    const record = await installer.executeInstall(plan, approveScripts || false);
     res.json({ success: true, server: record });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -157,7 +157,7 @@ app.post('/api/adapters/:adapterId/inject', async (req, res) => {
 });
 
 app.get('/api/audit', (req, res) => {
-  const { AuditLogger } = require('@BlackWh1te/core');
+  const { AuditLogger } = require('@blackwh1te/core');
   const audit = new AuditLogger();
   res.json(audit.getHistory());
 });
@@ -189,7 +189,7 @@ app.post('/api/adapters/:adapterId/rollback', async (req, res) => {
     fs.copyFileSync(require('path').join(dir, latestBackup), configPath);
     
     // Log rollback
-    const { AuditLogger } = require('@BlackWh1te/core');
+    const { AuditLogger } = require('@blackwh1te/core');
     new AuditLogger().log('CONFIG_ROLLBACK', 'N/A', { adapter: adapterId, restoredFrom: latestBackup });
     
     res.json({ success: true, restoredFrom: latestBackup });

@@ -9,5 +9,10 @@
     "build": "bun run --filter '*' build",
     "test": "bun run --filter '*' test",
     "dev": "bun run --filter '*' dev"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0",
+    "@types/node": "^26.4.1",
+    "typescript": "^7.0.2"
   }
 }

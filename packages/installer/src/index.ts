@@ -2,8 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 import util from 'util';
-import { DBManager, ServerRecord } from '@BlackWh1te/core';
-import { AuditLogger } from '@BlackWh1te/core';
+import { DBManager, ServerRecord } from '@blackwh1te/core';
+import { AuditLogger } from '@blackwh1te/core';
 
 const execAsync = util.promisify(exec);
 const audit = new AuditLogger();
@@ -18,6 +18,10 @@ export interface InstallPlan {
   integrity: string;
   command: string;
   args: string[];
+  binaries: string[];
+  lifecycleScripts: string[];
+  dependencies: string[];
+  riskAnalysis: string;
 }
 
 export class InstallationService {
@@ -33,41 +37,68 @@ export class InstallationService {
   }
 
   public async inspectAndPlan(locator: string, version: string = 'latest'): Promise<InstallPlan> {
-    // We fetch metadata from npm to verify it exists and get exact version & integrity
-    const res = await fetch(`https://registry.npmjs.org/${locator}/${version}`);
-    if (!res.ok) {
-      throw new Error(`Package ${locator}@${version} not found on NPM.`);
+    // 1. Validate and normalize the package name
+    if (!/^[a-zA-Z0-9@./_-]+$/.test(locator)) {
+      throw new Error('Invalid package name format');
     }
-    const metadata = await res.json();
+    const safeLocator = locator.toLowerCase();
+
+    // 2. Query package metadata safely
+    const res = await fetch(`https://registry.npmjs.org/${safeLocator}`);
+    if (!res.ok) {
+      throw new Error(`Package ${safeLocator} not found on NPM.`);
+    }
+    const data = await res.json();
     
-    // Safety check - what is the binary?
-    // Often it's npx <package-name>. But let's verify it has a bin or can be run via npx.
-    const serverId = locator.replace(/[^a-zA-Z0-9_-]/g, '_');
+    // 3. Resolve an exact immutable version
+    const exactVersion = data['dist-tags']?.[version] || version;
+    const metadata = data.versions[exactVersion];
+    if (!metadata) {
+      throw new Error(`Version ${exactVersion} not found for package ${safeLocator}`);
+    }
+
+    const serverId = safeLocator.replace(/[^a-zA-Z0-9_-]/g, '_');
     
+    // 8. Inspect binaries & scripts
+    const binaries = metadata.bin ? (typeof metadata.bin === 'string' ? [metadata.bin] : Object.keys(metadata.bin)) : [];
+    const scripts = metadata.scripts ? Object.keys(metadata.scripts).filter(s => ['preinstall', 'install', 'postinstall'].includes(s)) : [];
+
+    let riskAnalysis = 'Low';
+    if (scripts.length > 0) riskAnalysis = 'High (Executes arbitrary lifecycle scripts)';
+    else if (metadata.dependencies && Object.keys(metadata.dependencies).length > 50) riskAnalysis = 'Medium (Many dependencies)';
+
     return {
       serverId,
       sourceType: 'npm',
-      locator,
+      locator: safeLocator,
       targetDir: path.join(this.baseDir, serverId),
-      version: metadata.version,
+      version: exactVersion,
       license: metadata.license || 'Unknown',
       integrity: metadata.dist?.integrity || 'Unknown',
       command: 'npx',
-      args: ['-y', `${locator}@${metadata.version}`]
+      args: ['-y', `${safeLocator}@${exactVersion}`],
+      binaries,
+      lifecycleScripts: scripts,
+      dependencies: Object.keys(metadata.dependencies || {}),
+      riskAnalysis
     };
   }
 
-  public async executeInstall(plan: InstallPlan): Promise<ServerRecord> {
+  public async executeInstall(plan: InstallPlan, approveScripts: boolean = false): Promise<ServerRecord> {
     audit.log('INSTALL_STARTED', plan.serverId, { plan });
     
-    if (fs.existsSync(plan.targetDir)) {
-      fs.rmSync(plan.targetDir, { recursive: true, force: true });
+    // 9. Block lifecycle scripts by default, 10. require explicit approval
+    if (plan.lifecycleScripts.length > 0 && !approveScripts) {
+      const err = `Installation blocked: package contains lifecycle scripts (${plan.lifecycleScripts.join(', ')}). Explicit approval required.`;
+      audit.log('INSTALL_FAILED', plan.serverId, { error: err });
+      throw new Error(err);
     }
-    fs.mkdirSync(plan.targetDir, { recursive: true });
+    
+    // 13. Use a temporary staging directory
+    const stagingDir = path.join(this.baseDir, `.staging-${plan.serverId}-${Date.now()}`);
+    fs.mkdirSync(stagingDir, { recursive: true });
     
     try {
-      // Actually run npm install to cache it locally in the targetDir
-      // This isolates dependencies!
       const pkgJson = {
         name: `${plan.serverId}-wrapper`,
         version: "1.0.0",
@@ -75,10 +106,29 @@ export class InstallationService {
           [plan.locator]: plan.version
         }
       };
-      fs.writeFileSync(path.join(plan.targetDir, 'package.json'), JSON.stringify(pkgJson, null, 2));
+      fs.writeFileSync(path.join(stagingDir, 'package.json'), JSON.stringify(pkgJson, null, 2));
       
-      await execAsync('bun install', { cwd: plan.targetDir });
+      // 11. Execute processes with argument arrays and shell: false
+      const { spawn } = require('child_process');
+      const args = ['install'];
+      if (!approveScripts) args.push('--ignore-scripts');
       
+      await new Promise<void>((resolve, reject) => {
+        const proc = spawn('bun', args, { cwd: stagingDir, shell: false });
+        proc.on('close', (code: number | null) => {
+          if (code === 0) resolve();
+          else reject(new Error(`bun install exited with code ${code}`));
+        });
+      });
+      
+      // 14. Commit database state only after validation succeeds
+      if (fs.existsSync(plan.targetDir)) {
+        fs.rmSync(plan.targetDir, { recursive: true, force: true });
+      }
+      // 12. install into a unique managed directory
+      fs.renameSync(stagingDir, plan.targetDir);
+      
+      // 16. never expose environment secrets
       const record: ServerRecord = {
         id: plan.serverId,
         name: plan.locator,
@@ -86,9 +136,9 @@ export class InstallationService {
         sourceType: plan.sourceType,
         sourceLocator: plan.locator,
         installPath: plan.targetDir,
-        command: plan.command, // Usually npx
+        command: plan.command, 
         args: JSON.stringify(plan.args),
-        env: JSON.stringify({}),
+        env: JSON.stringify({}), // Do not log secrets
         status: 'stopped',
         installedAt: new Date().toISOString()
       };
@@ -99,8 +149,10 @@ export class InstallationService {
       return record;
       
     } catch (err: any) {
-      // Cleanup on failure
-      fs.rmSync(plan.targetDir, { recursive: true, force: true });
+      // 15. Remove partial files and revert state after failure
+      if (fs.existsSync(stagingDir)) {
+        fs.rmSync(stagingDir, { recursive: true, force: true });
+      }
       audit.log('INSTALL_FAILED', plan.serverId, { error: err.message });
       throw new Error(`Installation failed: ${err.message}`);
     }

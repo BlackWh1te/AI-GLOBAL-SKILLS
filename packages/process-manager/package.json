@@ -1,5 +1,5 @@
 {
-  "name": "@BlackWh1te/process-manager",
+  "name": "@blackwh1te/process-manager",
   "version": "0.1.0",
   "private": true,
   "main": "src/index.ts",

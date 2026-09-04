@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { AuditLogger } from '@BlackWh1te/core';
+import { AuditLogger } from '@blackwh1te/core';
 
 const audit = new AuditLogger();
 
