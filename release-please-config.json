@@ -3,6 +3,14 @@
     ".": {
       "release-type": "node",
       "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        "apps/daemon/package.json",
+        "apps/dashboard/package.json",
+        "packages/core/package.json",
+        "packages/registry/package.json",
+        "packages/installer/package.json",
+        "packages/client-adapters/package.json"
+      ],
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
       "changelog-sections": [

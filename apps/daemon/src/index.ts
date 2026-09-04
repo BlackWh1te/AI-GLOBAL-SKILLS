@@ -29,9 +29,11 @@ function releaseLock() {
   }
 }
 
+import pkg from '../package.json';
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ready', version: '0.1.0' });
+  res.json({ status: 'ready', version: pkg.version });
 });
 
 function openBrowser(url: string) {
