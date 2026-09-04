@@ -30,10 +30,45 @@ function releaseLock() {
 }
 
 import pkg from '../package.json';
+import { ProcessManager } from '@BlackWh1te/process-manager';
+
+const pm = new ProcessManager();
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ready', version: pkg.version });
+});
+
+// Process Management Endpoints
+app.post('/api/servers/:id/start', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { command, args, env, cwd } = req.body;
+    if (!command) {
+      return res.status(400).json({ error: 'Command is required' });
+    }
+    await pm.start(id, command, args || [], cwd, env || {});
+    res.json({ success: true, status: pm.getStatus(id) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/servers/:id/stop', async (req, res) => {
+  try {
+    await pm.stop(req.params.id);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/servers/:id/status', (req, res) => {
+  res.json(pm.getStatus(req.params.id));
+});
+
+app.get('/api/servers/:id/logs', (req, res) => {
+  res.json({ logs: pm.getLogs(req.params.id) });
 });
 
 function openBrowser(url: string) {
