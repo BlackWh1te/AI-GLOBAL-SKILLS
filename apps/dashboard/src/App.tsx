@@ -11,6 +11,7 @@ function App() {
   const SERVER_ID = 'test-server';
   
   const [adapters, setAdapters] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchHealth = async () => {
@@ -54,7 +55,16 @@ function App() {
         if (res.ok) setAdapters(await res.json());
       } catch (e) {}
     };
+
+    const fetchAudit = async () => {
+      try {
+        const res = await fetch('http://127.0.0.1:3000/api/audit');
+        if (res.ok) setAuditLogs(await res.json());
+      } catch (e) {}
+    };
+
     fetchAdapters();
+    fetchAudit();
     
     const interval = setInterval(() => {
       fetchHealth();
@@ -100,6 +110,21 @@ function App() {
       alert('Injected into ' + adapterId);
     } catch (err) {
       alert('Error injecting');
+    }
+  };
+
+  const rollbackConfig = async (adapterId: string) => {
+    if (!confirm('Are you sure you want to restore the last backup for this IDE?')) return;
+    try {
+      const res = await fetch(`http://127.0.0.1:3000/api/adapters/${adapterId}/rollback`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert('Restored successfully from ' + data.restoredFrom);
+      } else {
+        alert('Failed: ' + data.error);
+      }
+    } catch (err) {
+      alert('Error rolling back');
     }
   };
 
@@ -184,9 +209,27 @@ function App() {
                     onClick={() => injectConfig(adapter.id)}
                     style={{ padding: '0.5rem 1rem', cursor: 'pointer', background: '#333', color: 'white', border: 'none', borderRadius: '4px' }}
                   >Inject Config</button>
+                  <button 
+                    onClick={() => rollbackConfig(adapter.id)}
+                    style={{ padding: '0.5rem 1rem', cursor: 'pointer', background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: '4px' }}
+                  >Undo</button>
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+
+        <section style={{ padding: '1.5rem', background: '#fff', border: '1px solid #e5e5e5', borderRadius: '8px' }}>
+          <h2 style={{ marginTop: 0 }}>Audit History</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
+            {auditLogs.slice().reverse().map((log, i) => (
+              <div key={i} style={{ padding: '0.5rem', borderBottom: '1px solid #eee', fontSize: '0.875rem' }}>
+                <span style={{ color: '#666', marginRight: '1rem' }}>{new Date(log.timestamp).toLocaleTimeString()}</span>
+                <span style={{ fontWeight: 'bold', marginRight: '0.5rem' }}>{log.action}</span>
+                <span style={{ color: '#0369a1' }}>{log.details?.adapter || log.targetId}</span>
+              </div>
+            ))}
+            {auditLogs.length === 0 && <span style={{ color: '#999' }}>No history yet</span>}
           </div>
         </section>
       </main>

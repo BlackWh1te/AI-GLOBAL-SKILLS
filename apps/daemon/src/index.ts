@@ -99,6 +99,48 @@ app.post('/api/adapters/:adapterId/inject', async (req, res) => {
   }
 });
 
+app.get('/api/audit', (req, res) => {
+  const { AuditLogger } = require('@BlackWh1te/core');
+  const audit = new AuditLogger();
+  res.json(audit.getHistory());
+});
+
+app.post('/api/adapters/:adapterId/rollback', async (req, res) => {
+  try {
+    const { adapterId } = req.params;
+    const adapter = adapters.find(a => a.id === adapterId);
+    if (!adapter) {
+      return res.status(404).json({ error: 'Adapter not found' });
+    }
+    
+    // Simplistic rollback: if .bak exists, copy it back
+    const configPath = adapter.getConfigPath();
+    const fs = require('fs');
+    
+    // Find latest backup
+    const dir = require('path').dirname(configPath);
+    if (!fs.existsSync(dir)) return res.status(400).json({ error: 'No config dir' });
+    
+    const files = fs.readdirSync(dir);
+    const backups = files.filter((f: string) => f.startsWith(require('path').basename(configPath) + '.bak.'));
+    if (backups.length === 0) {
+      return res.status(400).json({ error: 'No backups found' });
+    }
+    
+    backups.sort();
+    const latestBackup = backups[backups.length - 1];
+    fs.copyFileSync(require('path').join(dir, latestBackup), configPath);
+    
+    // Log rollback
+    const { AuditLogger } = require('@BlackWh1te/core');
+    new AuditLogger().log('CONFIG_ROLLBACK', 'N/A', { adapter: adapterId, restoredFrom: latestBackup });
+    
+    res.json({ success: true, restoredFrom: latestBackup });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 function openBrowser(url: string) {
   let command;
   switch (os.platform()) {

@@ -82,8 +82,50 @@ export class WindsurfAdapter extends AntigravityAdapter {
   }
 }
 
+export class ClaudeDesktopAdapter extends AntigravityAdapter {
+  id = 'claude-desktop';
+  name = 'Claude Desktop';
+  getConfigPath(): string {
+    return process.platform === 'win32'
+      ? path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json')
+      : path.join(os.homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
+  }
+  isInstalled(): boolean {
+    return fs.existsSync(path.dirname(this.getConfigPath()));
+  }
+}
+
+export class VsCodeClineAdapter extends AntigravityAdapter {
+  id = 'vscode-cline';
+  name = 'VS Code (Cline/Roo)';
+  getConfigPath(): string {
+    return process.platform === 'win32'
+      ? path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Code', 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'settings', 'cline_mcp_settings.json')
+      : path.join(os.homedir(), 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'settings', 'cline_mcp_settings.json');
+  }
+  isInstalled(): boolean {
+    return fs.existsSync(path.dirname(path.dirname(this.getConfigPath()))); // check if extension dir exists
+  }
+}
+
+export class ClaudeCodeCliAdapter extends AntigravityAdapter {
+  id = 'claude-code-cli';
+  name = 'Claude Code CLI';
+  getConfigPath(): string {
+    // Claude CLI config path
+    return path.join(os.homedir(), '.claude.json');
+  }
+  isInstalled(): boolean {
+    // Assume installed if config file exists, or if a .claude folder exists
+    return fs.existsSync(this.getConfigPath()) || fs.existsSync(path.join(os.homedir(), '.claude'));
+  }
+}
+
 export const adapters = [
   new AntigravityAdapter(),
   new CursorAdapter(),
-  new WindsurfAdapter()
+  new WindsurfAdapter(),
+  new ClaudeDesktopAdapter(),
+  new VsCodeClineAdapter(),
+  new ClaudeCodeCliAdapter()
 ];
