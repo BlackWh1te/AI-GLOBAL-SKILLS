@@ -84,7 +84,42 @@ const installer = new InstallationService(dbManager);
 app.get('/api/registry/servers', (req, res) => {
   try {
     const servers = dbManager.getServers();
-    res.json(servers);
+    const redactedServers = servers.map(server => {
+      let redactedEnv = '{}';
+      try {
+        const parsed = JSON.parse(server.env || '{}');
+        const redacted: Record<string, string> = {};
+        for (const key of Object.keys(parsed)) {
+          redacted[key] = '********';
+        }
+        redactedEnv = JSON.stringify(redacted);
+      } catch (e) {}
+      return { ...server, env: redactedEnv };
+    });
+    res.json(redactedServers);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/registry/servers/:id/env', (req, res) => {
+  try {
+    const { env } = req.body;
+    const server = dbManager.getServer(req.params.id);
+    if (!server) return res.status(404).json({ error: 'Server not found' });
+    
+    // Only update non-redacted fields (if client passes '********' it means unchanged)
+    const existingEnv = JSON.parse(server.env || '{}');
+    const newEnv = { ...existingEnv };
+    for (const key of Object.keys(env)) {
+      if (env[key] !== '********') {
+        newEnv[key] = env[key];
+      }
+    }
+    
+    server.env = JSON.stringify(newEnv);
+    dbManager.upsertServer(server);
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -139,17 +174,47 @@ app.get('/api/adapters', (req, res) => {
   })));
 });
 
+app.post('/api/adapters/:adapterId/preview', async (req, res) => {
+  try {
+    const { adapterId } = req.params;
+    const { serverId } = req.body;
+    
+    const adapter = adapters.find(a => a.id === adapterId);
+    if (!adapter) return res.status(404).json({ error: 'Adapter not found' });
+    
+    const server = dbManager.getServer(serverId);
+    if (!server) return res.status(404).json({ error: 'Server not found' });
+
+    let oldConfig = '{}';
+    if (fs.existsSync(adapter.getConfigPath())) {
+      oldConfig = fs.readFileSync(adapter.getConfigPath(), 'utf8');
+    }
+    
+    const args = JSON.parse(server.args || '[]');
+    const env = JSON.parse(server.env || '{}');
+    const newConfig = adapter.previewConfig(serverId, server.command, args, env);
+    
+    res.json({ oldConfig, newConfig });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/adapters/:adapterId/inject', async (req, res) => {
   try {
     const { adapterId } = req.params;
-    const { serverId, command, args, env } = req.body;
+    const { serverId } = req.body;
     
     const adapter = adapters.find(a => a.id === adapterId);
-    if (!adapter) {
-      return res.status(404).json({ error: 'Adapter not found' });
-    }
+    if (!adapter) return res.status(404).json({ error: 'Adapter not found' });
     
-    await adapter.applyConfig(serverId, command, args, env);
+    const server = dbManager.getServer(serverId);
+    if (!server) return res.status(404).json({ error: 'Server not found' });
+
+    const args = JSON.parse(server.args || '[]');
+    const env = JSON.parse(server.env || '{}');
+    
+    await adapter.applyConfig(serverId, server.command, args, env);
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

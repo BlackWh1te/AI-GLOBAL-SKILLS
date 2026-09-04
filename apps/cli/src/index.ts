@@ -156,4 +156,63 @@ program.command('uninstall <id>')
     console.log(`Uninstalled ${id}`);
   });
 
+program.command('configure <client> <server-id>')
+  .description('Configure a client for an installed server')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (client, serverId, options) => {
+    const preview = await fetchApi(`/adapters/${client}/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serverId })
+    });
+    
+    console.log('--- Current Config ---');
+    console.log(preview.oldConfig);
+    console.log('\n--- New Config ---');
+    console.log(preview.newConfig);
+    
+    if (!options.yes) {
+      const ans = prompt('Apply configuration? (y/n) ');
+      if (ans?.toLowerCase() !== 'y') {
+         console.log('Aborted.');
+         return;
+      }
+    }
+    
+    await fetchApi(`/adapters/${client}/inject`, {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ serverId })
+    });
+    console.log('Configuration applied successfully.');
+  });
+
+program.command('env:set <server-id> <key> <value>')
+  .description('Set an environment variable securely')
+  .action(async (serverId, key, value) => {
+    const servers = await fetchApi('/registry/servers');
+    const srv = servers.find((s: any) => s.id === serverId);
+    if (!srv) {
+       console.error('Server not found');
+       process.exit(1);
+    }
+    // servers API returns redacted env vars. If we update, we only send the delta, or we merge.
+    // Wait, PUT /api/registry/servers/:id/env only updates non-'********' values!
+    // So we can send { [key]: value }
+    const envDelta = { [key]: value };
+    await fetchApi(`/registry/servers/${serverId}/env`, {
+       method: 'PUT',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ env: envDelta })
+    });
+    console.log(`Set ${key} securely for ${serverId}.`);
+  });
+
+program.command('clients')
+  .description('List available AI clients')
+  .action(async () => {
+    const data = await fetchApi('/adapters');
+    console.table(data.map((c: any) => ({ ID: c.id, Name: c.name, Installed: c.installed })));
+  });
+
 program.parse(process.argv);
