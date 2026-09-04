@@ -73,9 +73,51 @@ app.get('/api/servers/:id/logs', (req, res) => {
 
 import { adapters } from '@BlackWh1te/client-adapters';
 import { RegistryClient, NpmScanner } from '@BlackWh1te/registry';
+import { InstallationService } from '@BlackWh1te/installer';
+import { DBManager } from '@BlackWh1te/core';
 
 const registryClient = new RegistryClient();
 const npmScanner = new NpmScanner();
+const dbManager = new DBManager();
+const installer = new InstallationService(dbManager);
+
+app.get('/api/registry/servers', (req, res) => {
+  try {
+    const servers = dbManager.getServers();
+    res.json(servers);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/registry/install/plan', async (req, res) => {
+  try {
+    const { locator, version } = req.body;
+    const plan = await installer.inspectAndPlan(locator, version);
+    res.json(plan);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/registry/install', async (req, res) => {
+  try {
+    const plan = req.body.plan;
+    const record = await installer.executeInstall(plan);
+    res.json({ success: true, server: record });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/registry/servers/:id', async (req, res) => {
+  try {
+    await installer.uninstall(req.params.id);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.get('/api/registry/search', async (req, res) => {
   try {
@@ -200,7 +242,7 @@ async function startDaemon() {
     console.log('Daemon is healthy and ready.');
     
     // For local dev, we might open a dev dashboard instead (e.g. 5173). Let's assume the dashboard is served here eventually or runs separately.
-    // openBrowser(url); // Skipped for bare API right now, the dashboard runs on Vite
+    openBrowser(url);
   });
 
   // Graceful shutdown

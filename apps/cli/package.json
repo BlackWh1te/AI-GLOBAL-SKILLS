@@ -1,0 +1,18 @@
+{
+  "name": "@BlackWh1te/cli",
+  "version": "0.1.0",
+  "private": true,
+  "bin": {
+    "global-mcp": "./bin/global-mcp"
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "commander": "^11.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  }
+}

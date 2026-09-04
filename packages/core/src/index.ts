@@ -40,3 +40,5 @@ export class AuditLogger {
       .map(line => JSON.parse(line));
   }
 }
+
+export * from './db';

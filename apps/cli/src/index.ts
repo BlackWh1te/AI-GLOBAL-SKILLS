@@ -1,0 +1,145 @@
+import { Command } from 'commander';
+import os from 'os';
+import { execSync } from 'child_process';
+
+const program = new Command();
+const API_BASE = 'http://127.0.0.1:3000/api';
+
+async function fetchApi(path: string, options?: RequestInit) {
+  try {
+    const res = await fetch(`${API_BASE}${path}`, options);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'API Error');
+    return data;
+  } catch (err: any) {
+    console.error('Error:', err.message);
+    process.exit(1);
+  }
+}
+
+program
+  .name('global-mcp')
+  .description('CLI for Global MCP Control Plane')
+  .version('0.1.0');
+
+program.command('status')
+  .description('Check daemon health')
+  .action(async () => {
+    const data = await fetchApi('/health');
+    console.log(`Daemon is running (v${data.version})`);
+  });
+
+program.command('list')
+  .description('List installed servers')
+  .action(async () => {
+    const data = await fetchApi('/registry/servers');
+    if (data.length === 0) {
+      console.log('No servers installed.');
+      return;
+    }
+    console.table(data.map((s: any) => ({ ID: s.id, Name: s.name, Version: s.version, Status: s.status })));
+  });
+
+program.command('search <query>')
+  .description('Search registry for MCP servers')
+  .action(async (query) => {
+    const data = await fetchApi(`/registry/search?q=${encodeURIComponent(query)}`);
+    console.log('Local Results:', data.local.length);
+    console.log('NPM Results:', data.npm.length);
+    data.npm.slice(0, 10).forEach((p: any) => {
+      console.log(`- ${p.name} (v${p.version}): ${p.description}`);
+    });
+  });
+
+program.command('install <locator>')
+  .description('Install an MCP server from NPM')
+  .action(async (locator) => {
+    console.log(`Planning installation for ${locator}...`);
+    const plan = await fetchApi('/registry/install/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locator })
+    });
+    
+    console.log('\n--- Install Plan ---');
+    console.log(`Server ID: ${plan.serverId}`);
+    console.log(`Version:   ${plan.version}`);
+    console.log(`Target:    ${plan.targetDir}`);
+    console.log(`Integrity: ${plan.integrity}`);
+    console.log('--------------------\n');
+    
+    const ans = prompt('Approve installation? (y/n) ');
+    if (ans?.toLowerCase() !== 'y') {
+      console.log('Aborted.');
+      return;
+    }
+    
+    console.log('Installing (this may take a minute)...');
+    const res = await fetchApi('/registry/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan })
+    });
+    console.log(`Successfully installed ${res.server.name} as ${res.server.id}`);
+  });
+
+program.command('start <id>')
+  .description('Start a server')
+  .action(async (id) => {
+    // Need to get server details to know command
+    const servers = await fetchApi('/registry/servers');
+    const srv = servers.find((s: any) => s.id === id);
+    if (!srv) {
+      console.error('Server not found in DB.');
+      process.exit(1);
+    }
+    
+    const res = await fetchApi(`/servers/${id}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        command: srv.command,
+        args: JSON.parse(srv.args),
+        env: JSON.parse(srv.env || '{}'),
+        cwd: srv.installPath
+      })
+    });
+    console.log(`Started ${id}, PID: ${res.status.pid}`);
+  });
+
+program.command('stop <id>')
+  .description('Stop a server')
+  .action(async (id) => {
+    await fetchApi(`/servers/${id}/stop`, { method: 'POST' });
+    console.log(`Stopped ${id}`);
+  });
+
+program.command('logs <id>')
+  .description('View logs for a server')
+  .action(async (id) => {
+    const data = await fetchApi(`/servers/${id}/logs`);
+    console.log(data.logs.join('\n'));
+  });
+
+program.command('dashboard')
+  .description('Open local dashboard')
+  .action(() => {
+    const url = 'http://127.0.0.1:3000'; // Or vite port
+    console.log(`Opening ${url}`);
+    let command;
+    switch (os.platform()) {
+      case 'win32': command = `start "" "${url}"`; break;
+      case 'darwin': command = `open "${url}"`; break;
+      default: command = `xdg-open "${url}"`; break;
+    }
+    execSync(command);
+  });
+
+program.command('uninstall <id>')
+  .description('Uninstall a server')
+  .action(async (id) => {
+    await fetchApi(`/registry/servers/${id}`, { method: 'DELETE' });
+    console.log(`Uninstalled ${id}`);
+  });
+
+program.parse(process.argv);
