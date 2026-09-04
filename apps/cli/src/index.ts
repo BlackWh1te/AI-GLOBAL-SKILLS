@@ -5,7 +5,20 @@ import { execSync } from 'child_process';
 const program = new Command();
 const API_BASE = 'http://127.0.0.1:3000/api';
 
-async function fetchApi(path: string, options?: RequestInit) {
+async function fetchApi(apiPath: string, options?: RequestInit) {
+  const os = require('os');
+  const fs = require('fs');
+  const p = require('path');
+  const tokenFile = p.join(os.homedir(), '.gemini', 'config', '.global-mcp-token');
+  let token = '';
+  if (fs.existsSync(tokenFile)) token = fs.readFileSync(tokenFile, 'utf8').trim();
+  
+  options = options || {};
+  options.headers = {
+    ...options.headers,
+    'Authorization': `Bearer ${token}`
+  };
+
   try {
     const res = await fetch(`${API_BASE}${path}`, options);
     const data = await res.json();

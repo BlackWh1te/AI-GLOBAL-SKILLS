@@ -9,16 +9,18 @@
     "build": "tsc"
   },
   "dependencies": {
-    "express": "^4.21.0",
-    "@blackwh1te/process-manager": "workspace:*",
     "@blackwh1te/client-adapters": "workspace:*",
-    "@blackwh1te/registry": "workspace:*",
-    "@blackwh1te/installer": "workspace:*",
     "@blackwh1te/core": "workspace:*",
-    "cors": "^2.8.5"
+    "@blackwh1te/installer": "workspace:*",
+    "@blackwh1te/process-manager": "workspace:*",
+    "@blackwh1te/registry": "workspace:*",
+    "cors": "^2.8.5",
+    "diff": "^9.0.0",
+    "express": "^4.21.0"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
-    "@types/cors": "^2.8.17"
+    "@types/cors": "^2.8.17",
+    "@types/diff": "^8.0.0",
+    "@types/express": "^4.17.21"
   }
 }

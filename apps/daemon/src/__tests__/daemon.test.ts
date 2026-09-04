@@ -3,7 +3,7 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 
-const DAEMON_ENTRY = path.join(process.cwd(), 'apps/daemon/src/index.ts');
+const DAEMON_ENTRY = path.join(process.cwd(), 'src/index.ts');
 const LOCK_FILE = path.join(process.cwd(), '.global-mcp.lock');
 
 beforeAll(() => {

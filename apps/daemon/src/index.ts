@@ -9,7 +9,42 @@ import os from 'os';
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
+
+import { randomBytes, createHash } from 'crypto';
+const TOKEN_FILE = path.join(os.homedir(), '.gemini', 'config', '.global-mcp-token');
+let DAEMON_TOKEN = '';
+if (fs.existsSync(TOKEN_FILE)) {
+  DAEMON_TOKEN = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
+} else {
+  DAEMON_TOKEN = randomBytes(32).toString('hex');
+  const configDir = path.dirname(TOKEN_FILE);
+  if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
+  fs.writeFileSync(TOKEN_FILE, DAEMON_TOKEN, { mode: 0o600 });
+}
+
+app.use((req, res, next) => {
+  // Allow health and UI without token, but validate Host/Origin
+  if (req.headers.host && !['localhost', '127.0.0.1'].some(h => (req.headers.host as string).includes(h))) {
+    return res.status(403).json({ error: 'Invalid Host' });
+  }
+  if (req.headers.origin && !['http://localhost', 'http://127.0.0.1'].some(o => (req.headers.origin as string).startsWith(o))) {
+    return res.status(403).json({ error: 'Invalid Origin' });
+  }
+
+  // Exempt GET endpoints and OPTIONS
+  if (req.method === 'GET' || req.method === 'OPTIONS') return next();
+
+  // Validate Token for mutations
+  const auth = req.headers.authorization || '';
+  if (auth !== `Bearer ${DAEMON_TOKEN}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+});
+
+const previewTokens = new Map<string, { oldHash: string, newHash: string, expires: number }>();
+
 
 const LOCK_FILE = path.join(process.cwd(), '.global-mcp.lock');
 
@@ -25,7 +60,7 @@ function checkLock() {
 
 function releaseLock() {
   if (fs.existsSync(LOCK_FILE)) {
-    try { fs.unlinkSync(LOCK_FILE); } catch (e) {}
+    try { fs.unlinkSync(LOCK_FILE); } catch (e) { console.error('Failed to release lock', e); }
   }
 }
 
@@ -44,10 +79,13 @@ app.post('/api/servers/:id/start', async (req, res) => {
   try {
     const { id } = req.params;
     const { command, args, env, cwd } = req.body;
+    const server = dbManager.getServer(id);
+    if(!server) return res.status(404).json({error: "Not found"});
     if (!command) {
       return res.status(400).json({ error: 'Command is required' });
     }
-    await pm.start(id, command, args || [], cwd, env || {});
+    const resolvedEnv = await SecretsManager.resolveEnv(server.env);
+    await pm.start(id, command, args || [], cwd, resolvedEnv);
     res.json({ success: true, status: pm.getStatus(id) });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -74,7 +112,8 @@ app.get('/api/servers/:id/logs', (req, res) => {
 import { adapters } from '@blackwh1te/client-adapters';
 import { RegistryClient, NpmScanner } from '@blackwh1te/registry';
 import { InstallationService } from '@blackwh1te/installer';
-import { DBManager } from '@blackwh1te/core';
+import { DBManager, SecretsManager } from '@blackwh1te/core';
+import * as diff from 'diff';
 
 const registryClient = new RegistryClient();
 const npmScanner = new NpmScanner();
@@ -93,7 +132,9 @@ app.get('/api/registry/servers', (req, res) => {
           redacted[key] = '********';
         }
         redactedEnv = JSON.stringify(redacted);
-      } catch (e) {}
+      } catch (e) {
+        console.error('Failed to parse env for redaction', e);
+      }
       return { ...server, env: redactedEnv };
     });
     res.json(redactedServers);
@@ -102,7 +143,7 @@ app.get('/api/registry/servers', (req, res) => {
   }
 });
 
-app.put('/api/registry/servers/:id/env', (req, res) => {
+app.put('/api/registry/servers/:id/env', async (req, res) => {
   try {
     const { env } = req.body;
     const server = dbManager.getServer(req.params.id);
@@ -110,14 +151,16 @@ app.put('/api/registry/servers/:id/env', (req, res) => {
     
     // Only update non-redacted fields (if client passes '********' it means unchanged)
     const existingEnv = JSON.parse(server.env || '{}');
+    
     const newEnv = { ...existingEnv };
     for (const key of Object.keys(env)) {
       if (env[key] !== '********') {
-        newEnv[key] = env[key];
+        const ref = await SecretsManager.storeSecret(server.id, key, env[key]);
+        newEnv[key] = ref;
       }
     }
-    
     server.env = JSON.stringify(newEnv);
+
     dbManager.upsertServer(server);
     res.json({ success: true });
   } catch (err: any) {
@@ -194,7 +237,23 @@ app.post('/api/adapters/:adapterId/preview', async (req, res) => {
     const env = JSON.parse(server.env || '{}');
     const newConfig = adapter.previewConfig(serverId, server.command, args, env);
     
-    res.json({ oldConfig, newConfig });
+    
+    const oldHash = createHash('sha256').update(oldConfig).digest('hex');
+    const newHash = createHash('sha256').update(newConfig).digest('hex');
+    const token = randomBytes(16).toString('hex');
+    previewTokens.set(token, { oldHash, newHash, expires: Date.now() + 60000 });
+    
+    const textDiff = diff.createTwoFilesPatch(
+      'current_config.json',
+      'new_config.json',
+      oldConfig,
+      newConfig,
+      'Current',
+      'New'
+    );
+    res.json({ oldConfig, newConfig, previewToken: token, oldHash, newHash, diff: textDiff });
+
+
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -203,18 +262,36 @@ app.post('/api/adapters/:adapterId/preview', async (req, res) => {
 app.post('/api/adapters/:adapterId/inject', async (req, res) => {
   try {
     const { adapterId } = req.params;
-    const { serverId } = req.body;
-    
+    const { serverId, previewToken, expectedOldHash } = req.body;
+
+    const tokenData = previewTokens.get(previewToken);
+    if (!tokenData || Date.now() > tokenData.expires) {
+      return res.status(400).json({ error: 'Invalid or expired preview token' });
+    }
+    if (tokenData.oldHash !== expectedOldHash) {
+      return res.status(400).json({ error: 'Hash mismatch' });
+    }
+    previewTokens.delete(previewToken);
+
     const adapter = adapters.find(a => a.id === adapterId);
     if (!adapter) return res.status(404).json({ error: 'Adapter not found' });
     
     const server = dbManager.getServer(serverId);
     if (!server) return res.status(404).json({ error: 'Server not found' });
 
+    let currentConfig = '{}';
+    if (fs.existsSync(adapter.getConfigPath())) {
+      currentConfig = fs.readFileSync(adapter.getConfigPath(), 'utf8');
+    }
+    const currentHash = createHash('sha256').update(currentConfig).digest('hex');
+    if (currentHash !== expectedOldHash) {
+      return res.status(409).json({ error: 'Config file changed on disk since preview' });
+    }
+
     const args = JSON.parse(server.args || '[]');
-    const env = JSON.parse(server.env || '{}');
+    const resolvedEnv = await SecretsManager.resolveEnv(server.env);
     
-    await adapter.applyConfig(serverId, server.command, args, env);
+    await adapter.applyConfig(serverId, server.command, args, resolvedEnv);
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

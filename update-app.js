@@ -3,20 +3,46 @@ const path = require('path');
 const file = path.join('apps', 'dashboard', 'src', 'App.tsx');
 let content = fs.readFileSync(file, 'utf8');
 
-// replace injectConfig
-content = content.replace(/const injectConfig = async.*?^\s*\};/ms, `
-  const [previewData, setPreviewData] = useState<{adapterId: string, serverId: string, old: string, new: string} | null>(null);
+content = content.replace(/const \[status, setStatus\] = useState<string>\('checking\.\.\.'\);/, `const [status, setStatus] = useState<string>('checking...');
+  const [token, setToken] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get('token');
+    if (t) { localStorage.setItem('mcp_token', t); window.history.replaceState({}, '', window.location.pathname); return t; }
+    return localStorage.getItem('mcp_token') || '';
+  });
+`);
 
-  const previewConfig = async (adapterId: string, serverId: string) => {
+content = content.replace(/useEffect\(\(\) => \{/, `const authFetch = async (url: string, options?: RequestInit) => {
+    const headers = { ...options?.headers, 'Authorization': \`Bearer \${token}\` };
+    return fetch(url, { ...options, headers });
+  };
+  
+  useEffect(() => {`);
+
+// replace fetch with authFetch
+content = content.replace(/fetch\('http:\/\/127\.0\.0\.1:3000\/api\/adapters\/(\$\{.*?\})\/preview'/g, "authFetch(`http://127.0.0.1:3000/api/adapters/$1/preview`");
+content = content.replace(/fetch\('http:\/\/127\.0\.0\.1:3000\/api\/adapters\/(\$\{.*?\})\/inject'/g, "authFetch(`http://127.0.0.1:3000/api/adapters/$1/inject`");
+content = content.replace(/fetch\('http:\/\/127\.0\.0\.1:3000\/api\/registry\/servers\/(\$\{.*?\})\/env'/g, "authFetch(`http://127.0.0.1:3000/api/registry/servers/$1/env`");
+content = content.replace(/fetch\(\`http:\/\/127\.0\.0\.1:3000\/api\/servers\/\$\{id\}\/start\`/g, "authFetch(`http://127.0.0.1:3000/api/servers/${id}/start`");
+content = content.replace(/fetch\(\`http:\/\/127\.0\.0\.1:3000\/api\/servers\/\$\{id\}\/stop\`/g, "authFetch(`http://127.0.0.1:3000/api/servers/${id}/stop`");
+content = content.replace(/fetch\(\`http:\/\/127\.0\.0\.1:3000\/api\/registry\/servers\/\$\{id\}\`/g, "authFetch(`http://127.0.0.1:3000/api/registry/servers/${id}`");
+content = content.replace(/fetch\('http:\/\/127\.0\.0\.1:3000\/api\/registry\/install\/plan'/g, "authFetch('http://127.0.0.1:3000/api/registry/install/plan'");
+content = content.replace(/fetch\('http:\/\/127\.0\.0\.1:3000\/api\/registry\/install'/g, "authFetch('http://127.0.0.1:3000/api/registry/install'");
+
+content = content.replace(/const \[previewData, setPreviewData\] = useState[\s\S]*?\| null>\(null\);/, `const [previewData, setPreviewData] = useState<any>(null);
+  const [selectedServerId, setSelectedServerId] = useState<string>('');`);
+
+content = content.replace(/const previewConfig = async \([\s\S]*?\}\n  \};\n/m, `const previewConfig = async (adapterId: string) => {
+    if(!selectedServerId) return alert('Select a server first');
     try {
-      const res = await fetch(\`http://127.0.0.1:3000/api/adapters/\${adapterId}/preview\`, {
+      const res = await authFetch(\`http://127.0.0.1:3000/api/adapters/\${adapterId}/preview\`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serverId })
+        body: JSON.stringify({ serverId: selectedServerId })
       });
       const data = await res.json();
       if(res.ok) {
-        setPreviewData({ adapterId, serverId, old: data.oldConfig, new: data.newConfig });
+        setPreviewData({ adapterId, serverId: selectedServerId, diff: data.diff, token: data.previewToken, hash: data.oldHash });
       } else {
         alert(data.error);
       }
@@ -24,89 +50,25 @@ content = content.replace(/const injectConfig = async.*?^\s*\};/ms, `
       alert('Error previewing config');
     }
   };
-
-  const confirmInject = async () => {
-    if(!previewData) return;
-    try {
-      await fetch(\`http://127.0.0.1:3000/api/adapters/\${previewData.adapterId}/inject\`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serverId: previewData.serverId })
-      });
-      alert('Injected successfully');
-      setPreviewData(null);
-    } catch(e) {
-      alert('Error injecting');
-    }
-  };
-
-  const updateEnv = async (serverId: string, key: string, val: string) => {
-     try {
-       await fetch(\`http://127.0.0.1:3000/api/registry/servers/\${serverId}/env\`, {
-         method: 'PUT',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({ env: { [key]: val } })
-       });
-       alert('Environment updated securely');
-     } catch(e) {}
-  };
 `);
 
-// fix hardcoded IDE inject button
-content = content.replace(/<button[^>]*onClick=\{\(\) => injectConfig\(adapter\.id\)\}.*?<\/button>/ms, `
-<button 
-  onClick={() => previewConfig(adapter.id, installedServers[0]?.id || 'test-server')}
-  style={{ padding: '0.5rem 1rem', cursor: 'pointer', background: '#333', color: 'white', border: 'none', borderRadius: '4px' }}
->Preview & Inject</button>
-`);
+content = content.replace(/body: JSON\.stringify\(\{ serverId: previewData\.serverId \}\)/, "body: JSON.stringify({ serverId: previewData.serverId, previewToken: previewData.token, expectedOldHash: previewData.hash })");
 
-// Add env rendering
-content = content.replace(/<button onClick=\{\(\) => uninstallServer\(server\.id\)\}.*?<\/button>/ms, `$&
-                        </div>
-                    </div>
-                    <div style={{ marginTop: '1rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>
-                      <div style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '0.5rem' }}>Environment Variables (Secrets Redacted)</div>
-                      {Object.keys(JSON.parse(server.env || '{}')).length === 0 ? <div style={{fontSize:'0.8rem', color:'#666'}}>No variables configured.</div> : null}
-                      {Object.entries(JSON.parse(server.env || '{}')).map(([k, v]) => (
-                        <div key={k} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                          <input type="text" readOnly value={k} style={{ padding: '0.25rem', width: '120px' }} />
-                          <input type="text" 
-                                 placeholder="Enter new value to update"
-                                 defaultValue={v as string} 
-                                 onBlur={e => { if(e.target.value && e.target.value !== v) updateEnv(server.id, k, e.target.value); }}
-                                 style={{ padding: '0.25rem', flex: 1 }} />
-                        </div>
-                      ))}
-`);
+content = content.replace(/onClick=\{\(\) => previewConfig\(adapter\.id, installedServers\[0\]\?\.id \|\| 'test-server'\)\}/, `onClick={() => previewConfig(adapter.id)} disabled={!selectedServerId}`);
 
-// add modal for preview at the end
-content = content.replace(/<\/div>\s*\)\;\s*\}\s*export default App;/ms, `
-      {previewData && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'white', padding: '2rem', borderRadius: '8px', width: '80%', maxWidth: '800px', maxHeight: '80vh', overflowY: 'auto' }}>
-            <h2>Review Configuration Changes</h2>
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <div style={{ flex: 1 }}>
-                <h3>Current Config</h3>
-                <pre style={{ background: '#f5f5f5', padding: '1rem', fontSize: '0.8rem', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>{previewData.old}</pre>
-              </div>
-              <div style={{ flex: 1 }}>
-                <h3>New Config</h3>
-                <pre style={{ background: '#f0fdf4', padding: '1rem', fontSize: '0.8rem', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>{previewData.new}</pre>
-              </div>
-            </div>
-            <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-              <button onClick={() => setPreviewData(null)} style={{ padding: '0.5rem 1rem' }}>Cancel</button>
-              <button onClick={confirmInject} style={{ padding: '0.5rem 1rem', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px' }}>Confirm Inject</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-export default App;
-`);
+content = content.replace(/<p style=\{\{ color: '#666', marginBottom: '1rem' \}\}>Install this MCP server directly into your local IDEs\.<\/p>/, `<p style={{ color: '#666', marginBottom: '1rem' }}>Install this MCP server directly into your local IDEs.</p>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ fontWeight: 'bold', marginRight: '1rem' }}>Target Server:</label>
+            <select value={selectedServerId} onChange={e => setSelectedServerId(e.target.value)} style={{ padding: '0.5rem', borderRadius: '4px' }}>
+              <option value="">-- Select a Server --</option>
+              {installedServers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>`);
+
+content = content.replace(/<div style=\{\{ flex: 1 \}\}>[\s\S]*?<\/div>\s*<div style=\{\{ flex: 1 \}\}>[\s\S]*?<\/div>/, `<div style={{ flex: 1 }}>
+                <h3>Unified Diff</h3>
+                <pre style={{ background: '#f8fafc', padding: '1rem', fontSize: '0.8rem', overflowX: 'auto', whiteSpace: 'pre-wrap', border: '1px solid #e2e8f0', borderRadius: '4px' }}>{previewData.diff}</pre>
+              </div>`);
 
 fs.writeFileSync(file, content);
 console.log('App.tsx updated');

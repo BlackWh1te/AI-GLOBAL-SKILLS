@@ -47,14 +47,43 @@ export class AntigravityAdapter implements ClientAdapter {
 
   async applyConfig(serverId: string, command: string, args: string[], env: Record<string, string> = {}): Promise<void> {
     const configPath = this.getConfigPath();
-    const newConfig = JSON.parse(this.previewConfig(serverId, command, args, env));
+    const newConfigStr = this.previewConfig(serverId, command, args, env);
     
-    if (fs.existsSync(configPath)) {
-      fs.copyFileSync(configPath, `${configPath}.bak.${Date.now()}`);
-    } else {
-      fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    // Safety 1: Validate JSON before writing
+    let newConfig;
+    try {
+      newConfig = JSON.parse(newConfigStr);
+    } catch(e) {
+      throw new Error('Generated config is invalid JSON');
     }
-    fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2));
+
+    const dir = path.dirname(configPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    // Safety 2: Normalize and validate paths
+    // If configPath exists, ensure it resolves inside expected directory
+    if (fs.existsSync(configPath)) {
+      const realPath = fs.realpathSync(configPath);
+      const realDir = fs.realpathSync(dir);
+      if (!realPath.startsWith(realDir)) {
+         throw new Error('Path traversal or symlink attack detected');
+      }
+    }
+
+    // Safety 3: Atomic write via tmp file
+    const tmpPath = path.join(dir, `.${path.basename(configPath)}.tmp.${Date.now()}`);
+    fs.writeFileSync(tmpPath, JSON.stringify(newConfig, null, 2), { mode: 0o600 });
+    
+    // Safety 4: Backup existing
+    if (fs.existsSync(configPath)) {
+      const backupPath = `${configPath}.bak.${Date.now()}`;
+      fs.copyFileSync(configPath, backupPath);
+    }
+
+    // Safety 5: Atomic rename
+    fs.renameSync(tmpPath, configPath);
     
     audit.log('CONFIG_INJECTED', serverId, { adapter: this.id, path: configPath });
   }

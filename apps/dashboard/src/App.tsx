@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react';
 
 function App() {
   const [status, setStatus] = useState<string>('checking...');
+  const [token] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get('token');
+    if (t) { localStorage.setItem('mcp_token', t); window.history.replaceState({}, '', window.location.pathname); return t; }
+    return localStorage.getItem('mcp_token') || '';
+  });
+
   const [version, setVersion] = useState<string>('');
   const [_error, setError] = useState<string>('');
   
@@ -19,6 +26,11 @@ function App() {
   const [installPlan, setInstallPlan] = useState<any | null>(null);
   const [installedServers, setInstalledServers] = useState<any[]>([]);
 
+  const authFetch = async (url: string, options?: RequestInit) => {
+    const headers = { ...options?.headers, 'Authorization': `Bearer ${token}` };
+    return fetch(url, { ...options, headers });
+  };
+  
   useEffect(() => {
     const fetchHealth = async () => {
       try {
@@ -90,7 +102,7 @@ function App() {
 
   const startServer = async (id: string, command: string, args: string, env: string, path: string) => {
     try {
-      await fetch(`http://127.0.0.1:3000/api/servers/${id}/start`, {
+      await authFetch(`http://127.0.0.1:3000/api/servers/${id}/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command, args: JSON.parse(args), env: JSON.parse(env || '{}'), cwd: path })
@@ -102,7 +114,7 @@ function App() {
 
   const stopServer = async (id: string) => {
     try {
-      await fetch(`http://127.0.0.1:3000/api/servers/${id}/stop`, { method: 'POST' });
+      await authFetch(`http://127.0.0.1:3000/api/servers/${id}/stop`, { method: 'POST' });
     } catch (err) {
       console.error(err);
     }
@@ -111,22 +123,24 @@ function App() {
   const uninstallServer = async (id: string) => {
     if(!confirm('Uninstall server?')) return;
     try {
-      await fetch(`http://127.0.0.1:3000/api/registry/servers/${id}`, { method: 'DELETE' });
+      await authFetch(`http://127.0.0.1:3000/api/registry/servers/${id}`, { method: 'DELETE' });
     } catch(e) {}
   };
 
-  const [previewData, setPreviewData] = useState<{adapterId: string, serverId: string, old: string, new: string} | null>(null);
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [selectedServerId, setSelectedServerId] = useState<string>('');
 
-  const previewConfig = async (adapterId: string, serverId: string) => {
+  const previewConfig = async (adapterId: string) => {
+    if(!selectedServerId) return alert('Select a server first');
     try {
-      const res = await fetch(`http://127.0.0.1:3000/api/adapters/${adapterId}/preview`, {
+      const res = await authFetch(`http://127.0.0.1:3000/api/adapters/${adapterId}/preview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serverId })
+        body: JSON.stringify({ serverId: selectedServerId })
       });
       const data = await res.json();
       if(res.ok) {
-        setPreviewData({ adapterId, serverId, old: data.oldConfig, new: data.newConfig });
+        setPreviewData({ adapterId, serverId: selectedServerId, diff: data.diff, token: data.previewToken, hash: data.oldHash });
       } else {
         alert(data.error);
       }
@@ -141,7 +155,7 @@ function App() {
       await fetch(`http://127.0.0.1:3000/api/adapters/${previewData.adapterId}/inject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serverId: previewData.serverId })
+        body: JSON.stringify({ serverId: previewData.serverId, previewToken: previewData.token, expectedOldHash: previewData.hash })
       });
       alert('Injected successfully');
       setPreviewData(null);
@@ -192,7 +206,7 @@ function App() {
 
   const planInstall = async (locator: string, version: string = 'latest') => {
     try {
-      const res = await fetch('http://127.0.0.1:3000/api/registry/install/plan', {
+      const res = await authFetch('http://127.0.0.1:3000/api/registry/install/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ locator, version })
@@ -207,7 +221,7 @@ function App() {
   const executeInstall = async () => {
     if (!installPlan) return;
     try {
-      await fetch('http://127.0.0.1:3000/api/registry/install', {
+      await authFetch('http://127.0.0.1:3000/api/registry/install', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: installPlan })
@@ -292,6 +306,13 @@ function App() {
         <section style={{ padding: '1.5rem', background: '#fff', border: '1px solid #e5e5e5', borderRadius: '8px' }}>
           <h2 style={{ marginTop: 0 }}>IDE Integration</h2>
           <p style={{ color: '#666', marginBottom: '1rem' }}>Install this MCP server directly into your local IDEs.</p>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ fontWeight: 'bold', marginRight: '1rem' }}>Target Server:</label>
+            <select value={selectedServerId} onChange={e => setSelectedServerId(e.target.value)} style={{ padding: '0.5rem', borderRadius: '4px' }}>
+              <option value="">-- Select a Server --</option>
+              {installedServers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {adapters.map(adapter => (
               <div key={adapter.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
@@ -304,7 +325,7 @@ function App() {
                     {adapter.installed ? 'Installed' : 'Not found'}
                   </span>
                   <button 
-                    onClick={() => previewConfig(adapter.id, installedServers[0]?.id || 'test-server')}
+                    onClick={() => previewConfig(adapter.id)} disabled={!selectedServerId}
                     style={{ padding: '0.5rem 1rem', cursor: 'pointer', background: '#333', color: 'white', border: 'none', borderRadius: '4px' }}
                   >Preview & Inject</button>
                   <button 
@@ -410,12 +431,8 @@ function App() {
             <h2>Review Configuration Changes</h2>
             <div style={{ display: 'flex', gap: '1rem' }}>
               <div style={{ flex: 1 }}>
-                <h3>Current Config</h3>
-                <pre style={{ background: '#f5f5f5', padding: '1rem', fontSize: '0.8rem', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>{previewData.old}</pre>
-              </div>
-              <div style={{ flex: 1 }}>
-                <h3>New Config</h3>
-                <pre style={{ background: '#f0fdf4', padding: '1rem', fontSize: '0.8rem', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>{previewData.new}</pre>
+                <h3>Unified Diff</h3>
+                <pre style={{ background: '#f8fafc', padding: '1rem', fontSize: '0.8rem', overflowX: 'auto', whiteSpace: 'pre-wrap', border: '1px solid #e2e8f0', borderRadius: '4px' }}>{previewData.diff}</pre>
               </div>
             </div>
             <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
