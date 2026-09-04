@@ -72,6 +72,21 @@ app.get('/api/servers/:id/logs', (req, res) => {
 });
 
 import { adapters } from '@BlackWh1te/client-adapters';
+import { RegistryClient, NpmScanner } from '@BlackWh1te/registry';
+
+const registryClient = new RegistryClient();
+const npmScanner = new NpmScanner();
+
+app.get('/api/registry/search', async (req, res) => {
+  try {
+    const q = req.query.q as string || '';
+    const local = registryClient.search(q);
+    const npm = await npmScanner.searchMcpServers(q);
+    res.json({ local, npm });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.get('/api/adapters', (req, res) => {
   res.json(adapters.map(a => ({

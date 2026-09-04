@@ -12,6 +12,10 @@ function App() {
   
   const [adapters, setAdapters] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'servers' | 'marketplace'>('servers');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{local: any[], npm: any[]}>({local: [], npm: []});
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     const fetchHealth = async () => {
@@ -128,15 +132,43 @@ function App() {
     }
   };
 
+  const searchRegistry = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsSearching(true);
+    try {
+      const res = await fetch(`http://127.0.0.1:3000/api/registry/search?q=${encodeURIComponent(searchQuery)}`);
+      const data = await res.json();
+      setSearchResults(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
-      <header style={{ borderBottom: '1px solid #ccc', paddingBottom: '1rem', marginBottom: '2rem' }}>
-        <h1 style={{ margin: 0, color: '#333' }}>Global MCP Control Plane</h1>
-        <p style={{ margin: '0.5rem 0 0 0', color: '#666' }}>Local Dashboard</p>
+      <header style={{ borderBottom: '1px solid #ccc', paddingBottom: '1rem', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1 style={{ margin: 0, color: '#333' }}>Global MCP Control Plane</h1>
+          <p style={{ margin: '0.5rem 0 0 0', color: '#666' }}>Local Dashboard</p>
+        </div>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button 
+            onClick={() => setActiveTab('servers')}
+            style={{ padding: '0.5rem 1rem', background: activeTab === 'servers' ? '#333' : '#e5e5e5', color: activeTab === 'servers' ? 'white' : '#333', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >My Servers</button>
+          <button 
+            onClick={() => setActiveTab('marketplace')}
+            style={{ padding: '0.5rem 1rem', background: activeTab === 'marketplace' ? '#3b82f6' : '#e5e5e5', color: activeTab === 'marketplace' ? 'white' : '#333', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >Discover MCPs</button>
+        </div>
       </header>
       
       <main style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        <section style={{ padding: '1.5rem', background: '#f5f5f5', borderRadius: '8px' }}>
+        {activeTab === 'servers' && (
+          <>
+            <section style={{ padding: '1.5rem', background: '#f5f5f5', borderRadius: '8px' }}>
           <h2 style={{ marginTop: 0 }}>Daemon Status</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <div style={{ 
@@ -232,6 +264,57 @@ function App() {
             {auditLogs.length === 0 && <span style={{ color: '#999' }}>No history yet</span>}
           </div>
         </section>
+          </>
+        )}
+
+        {activeTab === 'marketplace' && (
+          <section style={{ padding: '1.5rem', background: '#fff', border: '1px solid #e5e5e5', borderRadius: '8px' }}>
+            <h2 style={{ marginTop: 0 }}>Discover MCP Servers</h2>
+            <form onSubmit={searchRegistry} style={{ display: 'flex', gap: '0.5rem', marginBottom: '2rem' }}>
+              <input 
+                type="text" 
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search local registry and NPM..." 
+                style={{ flex: 1, padding: '0.75rem', borderRadius: '4px', border: '1px solid #ccc' }}
+              />
+              <button 
+                type="submit" 
+                disabled={isSearching}
+                style={{ padding: '0.75rem 1.5rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                {isSearching ? 'Searching...' : 'Search'}
+              </button>
+            </form>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {searchResults.local.length > 0 && <h3>From Global Skills Registry</h3>}
+              {searchResults.local.map((pkg, i) => (
+                <div key={'local'+i} style={{ padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#f8fafc' }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '1.125rem' }}>{pkg.name}</div>
+                  <div style={{ color: '#64748b', margin: '0.5rem 0' }}>{pkg.summary}</div>
+                  <div style={{ fontSize: '0.875rem' }}>Source: {pkg.source.locator}</div>
+                </div>
+              ))}
+
+              {searchResults.npm.length > 0 && <h3 style={{ marginTop: '1rem' }}>From NPM Registry</h3>}
+              {searchResults.npm.map((pkg, i) => (
+                <div key={'npm'+i} style={{ padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontWeight: 'bold', fontSize: '1.125rem' }}>{pkg.name} <span style={{ fontSize: '0.875rem', color: '#94a3b8', fontWeight: 'normal' }}>v{pkg.version}</span></span>
+                    <a href={pkg.links.npm} target="_blank" rel="noreferrer" style={{ color: '#3b82f6', textDecoration: 'none' }}>View on NPM</a>
+                  </div>
+                  <div style={{ color: '#64748b', margin: '0.5rem 0' }}>{pkg.description}</div>
+                  <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Author: {pkg.author}</div>
+                </div>
+              ))}
+              
+              {!isSearching && searchResults.local.length === 0 && searchResults.npm.length === 0 && searchQuery && (
+                <div style={{ color: '#666', textAlign: 'center', padding: '2rem' }}>No servers found for "{searchQuery}"</div>
+              )}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );

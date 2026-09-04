@@ -57,3 +57,40 @@ export class RegistryClient {
     );
   }
 }
+
+export interface NpmSearchResult {
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  date: string;
+  links: { npm: string; homepage?: string; repository?: string };
+}
+
+export class NpmScanner {
+  public async searchMcpServers(query: string = ''): Promise<NpmSearchResult[]> {
+    try {
+      // NPM registry search API, looking for 'mcp-server' keyword + optional text
+      const textParam = query ? `${query}+keywords:mcp-server` : 'keywords:mcp-server';
+      const url = `https://registry.npmjs.org/-/v1/search?text=${textParam}&size=50`;
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`NPM API error: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      return data.objects.map((obj: any) => ({
+        name: obj.package.name,
+        version: obj.package.version,
+        description: obj.package.description,
+        author: obj.package.author?.name || 'Unknown',
+        date: obj.package.date,
+        links: obj.package.links
+      }));
+    } catch (err) {
+      console.error('NPM Scanner error:', err);
+      return [];
+    }
+  }
+}

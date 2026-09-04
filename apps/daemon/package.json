@@ -12,6 +12,7 @@
     "express": "^4.21.0",
     "@BlackWh1te/process-manager": "workspace:*",
     "@BlackWh1te/client-adapters": "workspace:*",
+    "@BlackWh1te/registry": "workspace:*",
     "cors": "^2.8.5"
   },
   "devDependencies": {
