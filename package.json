@@ -6,8 +6,8 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
-    "dev": "npm run dev --workspaces --if-present"
+    "build": "bun run --filter '*' build",
+    "test": "bun run --filter '*' test",
+    "dev": "bun run --filter '*' dev"
   }
 }
