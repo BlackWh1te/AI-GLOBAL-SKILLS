@@ -1,0 +1,23 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "node",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true,
+      "changelog-sections": [
+        { "type": "feat", "section": "✨ Features | Новые функции" },
+        { "type": "fix", "section": "🐛 Bug Fixes | Исправления" },
+        { "type": "perf", "section": "🚀 Performance Improvements | Скорость" },
+        { "type": "revert", "section": "⏪ Reverts | Откаты" },
+        { "type": "docs", "section": "📝 Documentation | Документация", "hidden": false },
+        { "type": "refactor", "section": "♻️ Code Refactoring | Рефакторинг", "hidden": false },
+        { "type": "style", "section": "💄 Styles | Стиль", "hidden": true },
+        { "type": "chore", "section": "🏗️ Chores | Обслуживание", "hidden": true },
+        { "type": "test", "section": "✅ Tests | Тесты", "hidden": true },
+        { "type": "build", "section": "👷 Build | Сборка", "hidden": true },
+        { "type": "ci", "section": "🔧 CI/CD", "hidden": true }
+      ]
+    }
+  }
+}
