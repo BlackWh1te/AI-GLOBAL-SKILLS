@@ -26,3 +26,5 @@ catalog.csv
 *.key
 *.pem
 *secret*
+.global-mcp-data/
+.eslintcache
