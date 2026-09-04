@@ -9,7 +9,8 @@ build/
 node_modules/
 .DS_Store
 Thumbs.db
-logs/
+logs/*
+!logs/.gitkeep
 *.log
 coverage/
 .nyc_output/
